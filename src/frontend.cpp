@@ -168,6 +168,8 @@ int Frontend::EstimateCurrentPose() {
       features.push_back(current_frame_->features_left_[i]);
       EdgeProjectionPoseOnly *edge = new EdgeProjectionPoseOnly(mp->pos_, K);
       edge->setId(index);
+      //第一个参数是顶点的索引，一条边可以有多个顶点(这个问题中，整个图只有一个顶点)
+      //第二个参数是我们要设置的顶点对象，这个对象通常包含了我们希望优化的变量的初始值
       edge->setVertex(0, vertex_pose);
       edge->setMeasurement(
           toVec2(current_frame_->features_left_[i]->position_.pt));
@@ -337,7 +339,7 @@ int Frontend::FindFeaturesInRight() {
       Feature::Ptr feat(new Feature(current_frame_, kp));
       feat->is_on_left_image_ = false;
       current_frame_->features_right_.push_back(feat);
-      num_good_pts++;
+      num_good_pts++; //跟踪到的GFTT角点
     } else {
       current_frame_->features_right_.push_back(nullptr);
     }
@@ -350,9 +352,10 @@ bool Frontend::BuildInitMap() {
   std::vector<SE3> poses{camera_left_->pose(), camera_right_->pose()};
   size_t cnt_init_landmarks = 0;
   for (size_t i = 0; i < current_frame_->features_left_.size(); ++i) {
+    //左图像提取到的特征点并未在右图中找到对应的特征点 status[i]=0那一部分
     if (current_frame_->features_right_[i] == nullptr)
       continue;
-    // create map point from triangulation
+    // create map point from triangulation  //需要构造射线
     std::vector<Vec3> points{
         camera_left_->pixel2camera(
             Vec2(current_frame_->features_left_[i]->position_.pt.x,
@@ -361,7 +364,7 @@ bool Frontend::BuildInitMap() {
             Vec2(current_frame_->features_right_[i]->position_.pt.x,
                  current_frame_->features_right_[i]->position_.pt.y))};
     Vec3 pworld = Vec3::Zero();
-
+    //对当前匹配上的特征点进行三角化，得到地图点
     if (triangulation(poses, points, pworld) && pworld[2] > 0) {
       auto new_map_point = MapPoint::CreateNewMappoint();
       new_map_point->SetPos(pworld);
